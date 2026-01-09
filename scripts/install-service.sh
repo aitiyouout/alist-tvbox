@@ -12,7 +12,11 @@ NC='\e[0m'
 
 # ========== 变量定义 ==========
 SCRIPT_VERSION="v1.1"
-LOG_FILE="/opt/atv/log/upgrade.log"
+# 可通过环境变量覆盖部署目录
+ALIST_HOME="${ALIST_HOME:-/opt/atv}"
+ALIST_ALIST="${ALIST_ALIST:-${ALIST_HOME}/alist}"
+
+LOG_FILE="${ALIST_HOME}/log/upgrade.log"
 mkdir -p "$(dirname "$LOG_FILE")"
 echo "===== 升级日志 $(date '+%F %T') =====" > "$LOG_FILE"
 
@@ -91,8 +95,8 @@ APP=atv
 GROUP=$(id -gn)
 USER=$(id -un)
 
-[ -f /opt/atv/data/app_version ] && LOCAL_VERSION1=$(head -n 1 /opt/atv/data/app_version)
-[ -f /opt/atv/alist/data/version ] && LOCAL_VERSION2=$(head -n 1 /opt/atv/alist/data/version)
+[ -f ${ALIST_HOME}/data/app_version ] && LOCAL_VERSION1=$(head -n 1 ${ALIST_HOME}/data/app_version)
+[ -f ${ALIST_ALIST}/data/version ] && LOCAL_VERSION2=$(head -n 1 ${ALIST_ALIST}/data/version)
 
 if [ "$LOCAL_VERSION1" = "$VERSION1" ] && [ "$LOCAL_VERSION2" = "$VERSION2" ]; then
   log "$GREEN" "✅ 当前已是最新版本："
@@ -115,15 +119,15 @@ fi
 log "$CYAN" "当前用户: $USER:$GROUP"
 
 # ========== 创建目录结构 ==========
-sudo mkdir -p /opt/atv/{config,scripts,index,log,data/atv,data/backup,www/{cat,pg,zx,tvbox,files},alist/{data,log}}
-sudo chown -R ${USER}:${GROUP} /opt/atv
+sudo mkdir -p ${ALIST_HOME}/{config,scripts,index,log,data/atv,data/backup,www/{cat,pg,zx,tvbox,files},alist/{data,log}}
+sudo chown -R ${USER}:${GROUP} ${ALIST_HOME}
 
-conf=/opt/atv/config/application-production.yaml
+conf=${ALIST_HOME}/config/application-production.yaml
 if [ ! -f "$conf" ]; then
   sudo tee "$conf" > /dev/null <<EOF
 spring:
   datasource:
-    url: jdbc:h2:file:/opt/atv/data/data
+    url: jdbc:h2:file:${ALIST_HOME}/data/data
 EOF
 fi
 
@@ -142,7 +146,8 @@ cd "$TMPDIR"
 }
 
 # ========== 生成 systemd 服务 ==========
-cat <<EOF > atv.service
+[Unit]
+[Service]
 [Unit]
 Description=atv API
 After=syslog.target
@@ -151,8 +156,8 @@ After=syslog.target
 User=${USER}
 Group=${GROUP}
 Environment="NATIVE=true"
-WorkingDirectory=/opt/atv
-ExecStart=/opt/atv/atv --spring.profiles.active=standalone,production
+WorkingDirectory=${ALIST_HOME}
+ExecStart=${ALIST_HOME}/atv --spring.profiles.active=standalone,production
 Restart=on-failure
 RestartSec=5
 SuccessExitStatus=143
@@ -168,19 +173,19 @@ sudo systemctl stop atv.service || echo ""
 # ========== 安装 AList TvBox ==========
 [ "$LOCAL_VERSION1" != "$VERSION1" ] && {
   log "$YELLOW" "安装新版本 ATV..."
-  sudo rm -f /opt/atv/atv
-  sudo install -m 755 -o "$USER" -g "$GROUP" atv /opt/atv/atv
-  echo "$VERSION1" > /opt/atv/data/app_version
+  sudo rm -f ${ALIST_HOME}/atv
+  sudo install -m 755 -o "$USER" -g "$GROUP" atv ${ALIST_HOME}/atv
+  echo "$VERSION1" > ${ALIST_HOME}/data/app_version
 }
 
 # ========== 安装 Power AList ==========
 [ "$LOCAL_VERSION2" != "$VERSION2" ] && {
   log "$YELLOW" "安装新版本 AList..."
-  sudo rm -f /opt/atv/alist/alist
-  sudo install -m 755 -o "$USER" -g "$GROUP" alist /opt/atv/alist/alist
-  cd /opt/atv/alist
-  ./alist admin > /opt/atv/log/init.log 2>&1
-  echo "$VERSION2" > /opt/atv/alist/data/version
+  sudo rm -f ${ALIST_ALIST}/alist
+  sudo install -m 755 -o "$USER" -g "$GROUP" alist ${ALIST_ALIST}/alist
+  cd ${ALIST_ALIST}
+  ./alist admin > ${ALIST_HOME}/log/init.log 2>&1
+  echo "$VERSION2" > ${ALIST_ALIST}/data/version
 }
 
 # ========== 启动服务 ==========

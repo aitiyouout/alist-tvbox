@@ -1,6 +1,8 @@
 set -e
 
-BASE_DIR=/opt/alist
+# 可通过 ALIST_BASE 环境变量覆盖宿主机挂载目录
+ALIST_BASE=${ALIST_BASE:-/opt/alist}
+BASE_DIR=${ALIST_BASE}
 PORT1=4567
 PORT2=5344
 MOUNT=""
