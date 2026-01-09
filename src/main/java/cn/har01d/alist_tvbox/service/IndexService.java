@@ -159,7 +159,7 @@ public class IndexService {
         }
 
         try {
-            Path path = Path.of(Utils.inDocker ? "/app_version" : "/opt/atv/data/app_version");
+            Path path = Utils.getDataPath("app_version");
             if (Files.exists(path)) {
                 List<String> lines = Files.readAllLines(path);
                 if (lines.isEmpty()) {
@@ -175,7 +175,7 @@ public class IndexService {
         }
 
         try {
-            Path path = Path.of("/opt/atv/alist/data/version");
+            Path path = Path.of(Utils.getAListPath("data/version"));
             if (Files.exists(path)) {
                 List<String> lines = Files.readAllLines(path);
                 if (!lines.isEmpty()) {

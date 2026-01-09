@@ -61,10 +61,18 @@ public final class Utils {
     };
 
     public static boolean inDocker;
+    private static final String ALIST_HOME;
 
     static {
         readUserAgents();
         inDocker = System.getenv("INSTALL") != null && Files.exists(Path.of("/entrypoint.sh"));
+        String home = System.getenv("ALIST_HOME");
+        if (home != null && !home.isBlank()) {
+            ALIST_HOME = home.endsWith("/") ? home.substring(0, home.length() - 1) : home;
+        } else {
+            ALIST_HOME = "/opt/atv";
+        }
+        log.info("ALIST_HOME: {} (inDocker: {})", ALIST_HOME, inDocker);
     }
 
     private static void readUserAgents() {
@@ -276,22 +284,22 @@ public final class Utils {
     }
 
     public static Path getDataPath(String... path) {
-        String base = inDocker ? "/data" : "/opt/atv/data";
+        String base = inDocker ? "/data" : ALIST_HOME + "/data";
         return Path.of(base, path);
     }
 
     public static Path getWebPath(String... path) {
-        String base = inDocker ? "/www" : "/opt/atv/www";
+        String base = inDocker ? "/www" : ALIST_HOME + "/www";
         return Path.of(base, path);
     }
 
     public static Path getIndexPath(String... path) {
-        String base = inDocker ? "/data/index" : "/opt/atv/index";
+        String base = inDocker ? "/data/index" : ALIST_HOME + "/index";
         return Path.of(base, path);
     }
 
     public static Path getLogPath(String name) {
-        String base = inDocker ? "/data/log" : "/opt/atv/log";
+        String base = inDocker ? "/data/log" : ALIST_HOME + "/log";
         return Path.of(base, name);
     }
 
@@ -299,7 +307,7 @@ public final class Utils {
         if (name.startsWith("/")) {
             return name;
         }
-        String base = inDocker ? "/opt/alist/" : "/opt/atv/alist/";
+        String base = inDocker ? "/opt/alist/" : ALIST_HOME + "/alist/";
         return base + name;
     }
 

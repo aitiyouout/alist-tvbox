@@ -123,14 +123,14 @@ public class LogsService {
     public FileSystemResource downloadLog() throws IOException {
         File file = new File(aListLocalService.getLogPath());
         if (file.exists()) {
-            FileUtils.copyFileToDirectory(file, new File("/opt/atv/log/"));
+            FileUtils.copyFileToDirectory(file, Utils.getLogPath("").toFile());
         }
 
         File out = new File("/tmp/log.zip");
         out.createNewFile();
         try (FileOutputStream fos = new FileOutputStream(out);
              ZipOutputStream zipOut = new ZipOutputStream(fos)) {
-            File fileToZip = new File("/opt/atv/log/");
+            File fileToZip = Utils.getLogPath("").toFile();
             zipFile(fileToZip, "", zipOut);
         }
         return new FileSystemResource(out);

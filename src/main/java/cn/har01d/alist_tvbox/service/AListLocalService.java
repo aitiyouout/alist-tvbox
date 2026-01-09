@@ -62,7 +62,7 @@ public class AListLocalService {
     private int internalPort = 5244;
     private int externalPort = 5344;
     private String database = "sqlite3";
-    private String aListLogPath = "/opt/alist/log/alist.log";
+    private String aListLogPath = Utils.getAListPath("log/alist.log");
 
     public AListLocalService(SettingRepository settingRepository,
                              SiteRepository siteRepository,
