@@ -1,0 +1,58 @@
+name: Build Native Image (Optimized)
+
+on:
+  push:
+    branches: [ "master" ]
+  workflow_dispatch: # 允许手动点击按钮触发
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v4
+
+    # 1. 配置 GraalVM 环境 (这是编译单文件的核心)
+    - name: Setup GraalVM
+      uses: graalvm/setup-graalvm@v1
+      with:
+        java-version: '21'        # 推荐使用 Java 21
+        distribution: 'graalvm'   # 指定 GraalVM 发行版
+        github-token: ${{ secrets.GITHUB_TOKEN }}
+        native-image-job-reports: 'true'
+
+    # 2. 缓存 Maven 依赖，加快构建速度
+    - name: Cache Maven packages
+      uses: actions/cache@v3
+      with:
+        path: ~/.m2
+        key: ${{ runner.os }}-m2-${{ hashFiles('**/pom.xml') }}
+        restore-keys: ${{ runner.os }}-m2
+
+    # 3. 安装 UPX 压缩工具
+    - name: Install UPX
+      run: sudo apt-get update && sudo apt-get install -y upx
+
+    # 4. 执行 Native 编译 (核心步骤)
+    # 注意：这里会使用你之前优化的 pom.xml 配置
+    - name: Build Native Image
+      run: |
+        mvn -Pnative native:compile -DskipTests --no-transfer-progress
+
+    # 5. 压缩二进制文件
+    - name: Compress with UPX
+      run: |
+        # 假设编译出的文件名叫 alist-tvbox，位于 target 目录下
+        # 如果你的 imageName 配置不同，请修改这里
+        upx --best --lzma target/alist-tvbox
+        
+        # 重命名一下方便识别
+        mv target/alist-tvbox alist-tvbox-linux-amd64
+
+    # 6. 上传构建产物供下载
+    - name: Upload Artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: alist-tvbox-native-binary
+        path: alist-tvbox-linux-amd64
+        retention-days: 5
