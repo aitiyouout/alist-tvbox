@@ -12,16 +12,16 @@ jobs:
     steps:
     - uses: actions/checkout@v4
 
-    # 1. 配置 GraalVM 环境 (这是编译单文件的核心)
+    # 1. 配置 GraalVM 环境 (Java 21)
     - name: Setup GraalVM
       uses: graalvm/setup-graalvm@v1
       with:
-        java-version: '21'        # 推荐使用 Java 21
-        distribution: 'graalvm'   # 指定 GraalVM 发行版
+        java-version: '21'
+        distribution: 'graalvm'
         github-token: ${{ secrets.GITHUB_TOKEN }}
         native-image-job-reports: 'true'
 
-    # 2. 缓存 Maven 依赖，加快构建速度
+    # 2. 缓存 Maven 依赖
     - name: Cache Maven packages
       uses: actions/cache@v3
       with:
@@ -29,30 +29,53 @@ jobs:
         key: ${{ runner.os }}-m2-${{ hashFiles('**/pom.xml') }}
         restore-keys: ${{ runner.os }}-m2
 
-    # 3. 安装 UPX 压缩工具
+    # ========================================================
+    # 3. 【关键修复】手动编译安装缺失的 telegram4j 依赖
+    # ========================================================
+    - name: Install missing telegram4j dependency
+      run: |
+        echo "正在拉取 telegram4j 源码..."
+        git clone https://github.com/Penguin-D/telegram4j.git temp-telegram
+        
+        echo "正在本地编译安装 telegram4j..."
+        cd temp-telegram
+        # 强制使用 java 17 兼容性编译，跳过测试
+        mvn clean install -DskipTests -Dmaven.javadoc.skip=true
+        
+        echo "依赖安装完成！清理临时文件..."
+        cd ..
+        rm -rf temp-telegram
+
+    # 4. 安装 UPX 压缩工具
     - name: Install UPX
       run: sudo apt-get update && sudo apt-get install -y upx
 
-    # 4. 执行 Native 编译 (核心步骤)
-    # 注意：这里会使用你之前优化的 pom.xml 配置
+    # 5. 执行 Native 编译
+    # 增加 --no-fallback 参数，确保生成纯原生文件，不回退到 JVM 模式
     - name: Build Native Image
       run: |
-        mvn -Pnative native:compile -DskipTests --no-transfer-progress
+        mvn -Pnative native:compile -DskipTests --no-transfer-progress \
+          -Dnative-image.buildArgs="--no-fallback"
 
-    # 5. 压缩二进制文件
+    # 6. 压缩二进制文件 (体积优化)
     - name: Compress with UPX
       run: |
-        # 假设编译出的文件名叫 alist-tvbox，位于 target 目录下
-        # 如果你的 imageName 配置不同，请修改这里
-        upx --best --lzma target/alist-tvbox
+        # 查找 target 下生成的可执行文件 (排除 .jar 和 .txt)
+        # 通常文件名是 alist-tvbox
+        BINARY_PATH=$(find target -maxdepth 1 -type f -executable -not -name "*.sh" | head -n 1)
         
-        # 重命名一下方便识别
-        mv target/alist-tvbox alist-tvbox-linux-amd64
+        echo "找到编译产物: $BINARY_PATH"
+        
+        # 使用 UPX 极限压缩
+        upx --best --lzma "$BINARY_PATH"
+        
+        # 重命名方便识别
+        mv "$BINARY_PATH" alist-tvbox-linux-amd64
 
-    # 6. 上传构建产物供下载
+    # 7. 上传构建产物
     - name: Upload Artifact
       uses: actions/upload-artifact@v4
       with:
         name: alist-tvbox-native-binary
         path: alist-tvbox-linux-amd64
-        retention-days: 5
+        retention-days: 90
