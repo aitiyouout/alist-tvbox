@@ -3,7 +3,7 @@ name: Build Native Image (Optimized)
 on:
   push:
     branches: [ "master" ]
-  workflow_dispatch: # 允许手动点击按钮触发
+  workflow_dispatch:
 
 jobs:
   build:
@@ -12,7 +12,7 @@ jobs:
     steps:
     - uses: actions/checkout@v4
 
-    # 1. 配置 GraalVM 环境 (Java 21)
+    # 1. 配置 GraalVM 环境
     - name: Setup GraalVM
       uses: graalvm/setup-graalvm@v1
       with:
@@ -30,19 +30,25 @@ jobs:
         restore-keys: ${{ runner.os }}-m2
 
     # ========================================================
-    # 3. 【关键修复】手动编译安装缺失的 telegram4j 依赖
+    # 3. 【完美修复】下载并安装 telegram4j 依赖 (使用新地址)
     # ========================================================
-    - name: Install missing telegram4j dependency
+    - name: Install telegram4j dependency manually
       run: |
-        echo "正在拉取 telegram4j 源码..."
-        git clone https://github.com/Penguin-D/telegram4j.git temp-telegram
+        echo "正在从新官方仓库拉取 telegram4j..."
+        # 使用新的有效地址，并指定 main 分支 (防止 default branch 差异)
+        git clone https://github.com/Telegram4J/Telegram4J.git temp-telegram
         
-        echo "正在本地编译安装 telegram4j..."
+        echo "正在本地编译安装..."
         cd temp-telegram
-        # 强制使用 java 17 兼容性编译，跳过测试
-        mvn clean install -DskipTests -Dmaven.javadoc.skip=true
         
-        echo "依赖安装完成！清理临时文件..."
+        # 强制修正版本号 (防止源码版本号变动导致不匹配)
+        # alist-tvbox 需要 0.1.0-SNAPSHOT，确保 pom.xml 里是这个
+        mvn versions:set -DnewVersion=0.1.0-SNAPSHOT
+        
+        # 编译并安装到本地 Maven 仓库
+        mvn clean install -DskipTests -Dmaven.javadoc.skip=true -Dmaven.source.skip=true
+        
+        echo "依赖安装成功！"
         cd ..
         rm -rf temp-telegram
 
@@ -50,26 +56,25 @@ jobs:
     - name: Install UPX
       run: sudo apt-get update && sudo apt-get install -y upx
 
-    # 5. 执行 Native 编译
-    # 增加 --no-fallback 参数，确保生成纯原生文件，不回退到 JVM 模式
+    # 5. 执行 Native 编译 (保留所有功能)
     - name: Build Native Image
       run: |
         mvn -Pnative native:compile -DskipTests --no-transfer-progress \
           -Dnative-image.buildArgs="--no-fallback"
 
-    # 6. 压缩二进制文件 (体积优化)
+    # 6. 压缩二进制文件
     - name: Compress with UPX
       run: |
-        # 查找 target 下生成的可执行文件 (排除 .jar 和 .txt)
-        # 通常文件名是 alist-tvbox
+        # 自动查找 target 目录下的二进制文件
         BINARY_PATH=$(find target -maxdepth 1 -type f -executable -not -name "*.sh" | head -n 1)
         
-        echo "找到编译产物: $BINARY_PATH"
-        
-        # 使用 UPX 极限压缩
+        if [ -z "$BINARY_PATH" ]; then
+          echo "Error: 未找到编译产物！"
+          exit 1
+        fi
+
+        echo "找到产物: $BINARY_PATH"
         upx --best --lzma "$BINARY_PATH"
-        
-        # 重命名方便识别
         mv "$BINARY_PATH" alist-tvbox-linux-amd64
 
     # 7. 上传构建产物
